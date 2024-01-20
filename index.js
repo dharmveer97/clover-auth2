@@ -5,39 +5,46 @@ const axios = require("axios");
 const targetEnv = "https://sandbox.dev.clover.com"; // Pointing to Sandbox Environment
 // const targetEnv = 'https://www.clover.com'; // Pointing to Prod Environment
 
-const appID = "5QVMHPJ4YJ2K2"; // Input your app ID here
-const appSecret = "6458cc7b-9990-e4a7-5d7c-2d66a3b01a1c"; // Input your app secret here
+const appID = process.env.APP_ID; // Input your app ID here
+const appSecret = process.env.APP_SECRET_KEY; // Input your app secret here
 
 // Initialize Express
 const app = express();
 
 // Root Route
-app.get("/", (req, res) => authenticate(req, res));
+app.get("/", authenticate);
 
-// Steps 1 & 2 - Request merchant authorization to receive authorization code
-const authenticate = async (req, res) => {
+// Steps 1 & 2 - Request merchant authorization to receive an authorization code
+async function authenticate(req, res) {
   const url = `${targetEnv}/oauth/authorize?client_id=${appID}`;
+  try {
+    if (!req.query.code) {
+      // If there is no code parameter in the query string, redirect user for authentication
+      return res.redirect(url);
+    }
 
-  /* If there is no code parameter in the query string of the current url
-  redirect user for authentication. If there isn't then request API token */
-  !req.query.code
-    ? await res.redirect(url)
-    : await requestAPIToken(res, req.query);
-};
+    // If there is a code parameter, proceed to request API token
+    const data = await requestAPIToken(req.query.code);
+    res.send(data);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+}
 
 // Steps 3 & 4 - Request and serve up API token using the received authorization code
-const requestAPIToken = async (res, query) => {
-  const url = `${targetEnv}/oauth/token?client_id=${appID}&client_secret=${appSecret}&code=${query.code}`;
+async function requestAPIToken(code) {
+  const url = `${targetEnv}/oauth/token`;
+  const params = {
+    client_id: appID,
+    client_secret: appSecret,
+    code: code,
+  };
 
-  // Request
-  await axios
-    .get(url)
-    .then(({ data }) => res.send(data))
-    .catch((err) => res.send(err.message));
-};
+  const response = await axios.get(url, { params });
+
+  return response.data;
+}
 
 // Dynamic Port Binding
-const port = process.env.port || 5000;
-app.listen(port, () =>
-  console.log(`🍀 Run http://localhost:${port} in your browser`)
-);
+const port = process.env.PORT || 5000;
+app.listen(port, () => console.log(`🍀 Run http://localhost:${port} in your browser`));
